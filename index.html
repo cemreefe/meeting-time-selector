@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Global Meeting Scheduler (Grid)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        'primary': '#4f46e5',
+                        'primary-dark': '#4338ca',
+                        'secondary-bg': '#f3f4f6',
+                        'orange': {
+                            50: '#fff7ed',
+                            100: '#ffedd5',
+                            800: '#9a3412',
+                            900: '#7c2d12',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        .time-input {
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: textfield;
+            text-align: center;
+        }
+    </style>
+    <meta name="color-scheme" content="light dark">
+    <meta name="supported-color-schemes" content="light dark">
+    <meta name="theme-color" content="#4f46e5">
+</head>
+<body class="bg-secondary-bg min-h-screen p-4 md:p-8 font-sans">
+
+    <div class="max-w-6xl mx-auto">
+        <header class="text-center mb-10">
+            <h1 class="text-4xl font-extrabold text-gray-900 mb-2">Global Meeting Scheduler</h1>
+            <p class="text-gray-600">Find the best 3030-minute meeting slots that work across time zones.</p>
+            <!-- <p class="mt-2 text-sm text-yellow-600 p-2 bg-yellow-50 rounded-lg">
+                <span class="font-semibold">Heads30up:</span> Calculations use <span class="font-semibold">today</span> in your computers time zone to correctly account for Daylight Saving Time.
+            </p> -->
+        </header>
+
+        <!-- City Inputs Panel -->
+        <div class="bg-white p-6 md:p-8 rounded-xl shadow-2xl mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-2 flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-primary mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.727A8 8 0 016.343 3.273L12 10l-5.657-3.273z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6.343 16.727A8 8 0 0017.657 3.273L12 10l5.657 3.273z" />
+                </svg>
+                Participants and Working Hours
+            </h2>
+
+            <!-- Global Same-for-everyone toggle -->
+            <div class="w-full mb-4 flex items-center justify-between text-xs text-gray-600">
+                <p class="pr-4">
+                    <!-- Add each participant with their time zone and normal working hours. Well search for 3030-minute windows that maximize the number of people within hours. -->
+                </p>
+                <label class="inline-flex items-center text-xs text-gray-700 whitespace-nowrap">
+                    <input type="checkbox" id="same-all" class="mr-2 rounded border-gray-300 text-primary focus:ring-primary">Use same business hours for everyone
+                </label>
+            </div>
+
+            <div id="city-inputs" class="space-y-4">
+                <!-- Dynamic city input rows will be added here -->
+            </div>
+
+            <button onclick="addCityInput()" class="w-full mt-6 flex items-center justify-center px-4 py-2 border-2 border-dashed border-primary text-primary font-medium rounded-xl hover:bg-primary-dark hover:text-white transition duration-200" title="Add another participant">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                Add Participant
+            </button>
+
+            <!-- Same for everyone is now a checkbox on the first participant -->
+
+            <button id="calculate-btn" onclick="calculateOverlap()" class="w-full mt-6 bg-primary text-white py-3 rounded-xl font-semibold text-lg shadow-lg hover:bg-primary-dark transition duration-200" title="Find 30-minute meeting options">
+                Find Meeting Options
+            </button>
+        </div>
+
+        <!-- Results Panel -->
+        <div id="results-panel" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-2xl">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-4">
+                <h2 class="text-2xl font-bold text-gray-800 flex items-center mb-2 md:mb-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-600 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Meeting Options (Columns) × Participants (Rows)
+                </h2>
+                <div class="flex flex-col items-end text-xs w-40 max-w-xs md:mr-0 md:ml-0">
+                    <span class="text-gray-600 mb-1 whitespace-nowrap">Conformity level</span>
+                    <select id="conformity-level" class="border border-gray-300 rounded px-2 py-1 text-gray-700 bg-white w-full min-w-0"></select>
+                </div>
+            </div>
+            <div id="overlap-message" class="flex-grow p-3 rounded-lg bg-green-50 text-green-800 font-medium"></div>
+
+            <!-- Table results -->
+            <div id="results-table" class="w-full overflow-auto relative mb-3"></div>
+
+            <!-- Selection Summary -->
+            <div id="selection-summary" class="hidden mb-3 p-3 rounded-lg bg-indigo-50 text-indigo-900 text-sm font-medium"></div>
+
+            <div id="error-message" class="mt-4 p-4 rounded-xl bg-red-100 text-red-700 hidden"></div>
+
+            <!-- Legend / Guidance -->
+            <div class="mb-4 text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <div class="mb-1 font-semibold text-gray-700">How to read this table</div>
+                <ul class="list-disc ml-4 space-y-1">
+                    <li>Each column is a <span class="font-semibold">30-minute</span> meeting window. Click a column to highlight it and see a summary.</li>
+                    <li>Cell labels show local time for each participant. <span class="text-gray-500">+1d/30d</span> means the time is on the next/previous day for that participant.</li>
+                    <li>Chips: <span class="text-green-700 bg-green-100 px-1.5 py-0.5 rounded">Within</span> means inside working hours. <span class="text-orange-900 bg-orange-100 px-1.5 py-0.5 rounded">Start +Xm</span>/<span class="text-orange-900 bg-orange-100 px-1.5 py-0.5 rounded">End +Xm</span> show how far outside hours the slot falls. <span class="text-red-700 bg-red-100 px-1.5 py-0.5 rounded">Major adjustment</span> means outside at both ends.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Time Zone Data (Hidden) -->
+        <div id="timezone-data" style="display: none;">
+            <script>
+                const timeZones = [
+                    "Africa/Lagos", "America/Anchorage", "America/Argentina/Buenos_Aires", "America/Bogota",
+                    "America/Caracas", "America/Chicago", "America/Denver", "America/Halifax", "America/Los_Angeles",
+                    "America/Mexico_City", "America/New_York", "America/Phoenix", "America/Sao_Paulo", "America/Toronto",
+                    "Asia/Bangkok", "Asia/Dubai", "Asia/Hong_Kong", "Asia/Jakarta", "Asia/Kolkata", "Asia/Manila",
+                    "Asia/Shanghai", "Asia/Singapore", "Asia/Tokyo", "Asia/Seoul", "Australia/Sydney",
+                    "Europe/Amsterdam", "Europe/Athens", "Europe/Berlin", "Europe/Istanbul", "Europe/Lisbon",
+                    "Europe/London", "Europe/Moscow", "Pacific/Auckland", "UTC"
+                ];
+                timeZones.sort();
+            </script>
+        </div>
+
+        <div class="text-center mt-4">
+            <small class="text-gray-800">
+                a <a href="https://dutl.uk" target="_blank" rel="noopener noreferrer" class="underline text-primary hover:text-primary-dark">dutl.uk</a> app, made by <a href="https://cemrekarakas.com" target="_blank" rel="noopener noreferrer" class="underline text-primary hover:text-primary-dark">cemre</a>
+            </small>
+        </div>
+
+    </div>
+
+    <script>
+        const cityInputsContainer = document.getElementById('city-inputs');
+        const resultsPanel = document.getElementById('results-panel');
+        const resultsTable = document.getElementById('results-table');
+        const overlapMessage = document.getElementById('overlap-message');
+        const errorMessageDiv = document.getElementById('error-message');
+        const selectionSummary = document.getElementById('selection-summary');
+        let cityCount = 0;
+        let selectedColumnIndex = null;
+        let currentRenderedOptions = [];
+        let bestConformGlobal = null;
+        let currentConformLevel = null;
+        let desiredSelectedSlot = null; // {s: 'HH:MM', z: 'UTC'}
+
+        // --- URL state helpers ---
+        function encodeStateToQuery() {
+            const cityDivs = cityInputsContainer.querySelectorAll('div[data-city-row="true"]');
+            const participants = [];
+            for (const div of cityDivs) {
+                const id = div.id.split('-')[1];
+                const name = document.getElementById(`city-${id}-name`).value.trim();
+                const tz = document.getElementById(`city-${id}-tz`).value;
+                const start = document.getElementById(`city-${id}-start`).value;
+                const end = document.getElementById(`city-${id}-end`).value;
+                participants.push({ n: name, z: tz, s: start, e: end });
+            }
+            const payload = { p: participants };
+            // Persist selection state
+            if (selectedColumnIndex !== null) payload.sel = selectedColumnIndex;
+            if (currentConformLevel !== null) payload.level = currentConformLevel;
+            const sameAll = document.getElementById('same-all');
+            if (sameAll) payload.same = !!sameAll.checked;
+            if (currentRenderedOptions.length && selectedColumnIndex !== null && currentRenderedOptions[selectedColumnIndex]) {
+                const sMins = currentRenderedOptions[selectedColumnIndex].startMins;
+                const utcHHMM = hhmmInTimeZone(sMins, 'UTC');
+                payload.selSlot = { s: utcHHMM, z: 'UTC' };
+            }
+            const encoded = encodeURIComponent(JSON.stringify(payload));
+            const url = new URL(window.location.href);
+            url.searchParams.set('state', encoded);
+            window.history.replaceState(null, '', url.toString());
+        }
+
+        function tryLoadStateFromQuery() {
+            const url = new URL(window.location.href);
+            const encoded = url.searchParams.get('state');
+            if (!encoded) return false;
+            try {
+                const payload = JSON.parse(decodeURIComponent(encoded));
+                if (!payload || !Array.isArray(payload.p)) return false;
+                // Reset
+                cityInputsContainer.innerHTML = '';
+                cityCount = 0;
+                for (const p of payload.p) {
+                    addCityInput();
+                    const id = cityCount;
+                    document.getElementById(`city-${id}-name`).value = p.n || '';
+                    document.getElementById(`city-${id}-tz`).value = p.z || '';
+                    document.getElementById(`city-${id}-start`).value = p.s || '09:00';
+                    document.getElementById(`city-${id}-end`).value = p.e || '17:00';
+                }
+                if (payload.level !== undefined) currentConformLevel = payload.level;
+                if (payload.sel !== undefined) selectedColumnIndex = payload.sel;
+                if (payload.same !== undefined) {
+                    const master = document.getElementById('same-all');
+                    if (master) {
+                        master.checked = !!payload.same;
+                        if (master.checked) {
+                            // Apply disabled styling after initial inputs are created
+                            setTimeout(() => applySameForEveryoneMode(true), 0);
+                        }
+                    }
+                }
+                if (payload.selSlot) {
+                    desiredSelectedSlot = payload.selSlot;
+                    window.__desiredSelectedSlot = payload.selSlot; // fallback
+                }
+                return true;
+            } catch (e) {
+                console.warn('Failed to load state from URL', e);
+                return false;
+            }
+        }
+
+        function formatMinutesToTime(totalMinutes) {
+            const h = Math.floor(totalMinutes / 60) % 24;
+            const m = totalMinutes % 60;
+            const hour12 = h % 12 || 12;
+            const ampm = h < 12 || h === 24 ? 'AM' : 'PM';
+            const minutePadded = m.toString().padStart(2, '0');
+            return `${hour12}:${minutePadded} ${ampm}`;
+        }
+
+        // HH:MM 24-hour formatter for minutes since midnight
+        function formatMinutesToHHMM(totalMinutes) {
+            const mins = ((totalMinutes % 1440) + 1440) % 1440;
+            const h = Math.floor(mins / 60);
+            const m = mins % 60;
+            return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+        }
+
+        // Convert a base-minute instant to HH:MM as shown in a target IANA time zone
+        function hhmmInTimeZone(baseMinutes, timeZone) {
+            const now = new Date();
+            const baseDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, baseMinutes, 0, 0);
+            const txt = baseDate.toLocaleString('en-US', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+            const m = txt.match(/(\d+):(\d+)/);
+            if (!m) return null;
+            return `${m[1].padStart(2, '0')}:${m[2].padStart(2, '0')}`;
+        }
+
+        function timeToMinutes(timeStr) {
+            const [h, m] = timeStr.split(':').map(Number);
+            return h * 60 + m;
+        }
+
+        function convertBaseMinsToTargetTime(baseMinutes, targetTimeZone) {
+            const now = new Date();
+            const baseDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, baseMinutes, 0, 0);
+            const options = { hour: '2-digit', minute: '2-digit', timeZone: targetTimeZone, hour12: true };
+            return baseDate.toLocaleString('en-US', options);
+        }
+
+        // Detailed conversion: returns time string and day delta (-1,0,+1)
+        function convertBaseMinsToTargetTimeDetailed(baseMinutes, targetTimeZone) {
+            const now = new Date();
+            const baseDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, baseMinutes, 0, 0);
+
+            const timeText = baseDate.toLocaleString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: targetTimeZone, hour12: true });
+            const baseDayParts = baseDate.toLocaleString('en-US', { year: 'numeric', month: 'numeric', day: 'numeric' }).match(/(\d+)\/(\d+)\/(\d+)/);
+            const targetDayParts = baseDate.toLocaleString('en-US', { timeZone: targetTimeZone, year: 'numeric', month: 'numeric', day: 'numeric' }).match(/(\d+)\/(\d+)\/(\d+)/);
+            let dayDelta = 0;
+            if (baseDayParts && targetDayParts) {
+                const baseDateOnly = new Date(Number(baseDayParts[3]), Number(baseDayParts[1]) - 1, Number(baseDayParts[2]));
+                const targetDateOnly = new Date(Number(targetDayParts[3]), Number(targetDayParts[1]) - 1, Number(targetDayParts[2]));
+                const diffDays = Math.round((targetDateOnly.getTime() - baseDateOnly.getTime()) / 86400000);
+                if (diffDays > 0) dayDelta = 1;
+                else if (diffDays < 0) dayDelta = -1;
+            }
+            return { timeText, dayDelta };
+        }
+
+        function getBaseMinsEquivalent(localTimeStr, timeZone) {
+            try {
+                const [h, m] = localTimeStr.split(':').map(Number);
+                const now = new Date();
+                // Start with a local guess at the requested wall time
+                let guess = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0, 0);
+                // Iteratively adjust so that, when shown in target TZ, it matches h:m
+                for (let i = 0; i < 3; i++) {
+                    const formatted = guess.toLocaleString('en-US', {
+                        timeZone,
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hourCycle: 'h23',
+                        year: 'numeric', month: 'numeric', day: 'numeric'
+                    });
+                    const match = formatted.match(/(\d+)\/(\d+)\/(\d+), (\d+):(\d+)/);
+                    if (!match) break;
+                    const dispHour = Number(match[4]);
+                    const dispMinute = Number(match[5]);
+                    const dispTotal = dispHour * 60 + dispMinute;
+                    const targetTotal = h * 60 + m;
+                    let delta = targetTotal - dispTotal; // minutes to shift guess
+                    // Normalize to the closest representation within +/- 12h
+                    if (delta > 720) delta -= 1440;
+                    if (delta < -720) delta += 1440;
+                    if (delta === 0) break;
+                    guess = new Date(guess.getTime() + delta * 60000);
+                }
+                const localMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+                const diffMins = Math.round((guess.getTime() - localMidnight.getTime()) / 60000);
+                return diffMins; // can be <0 or >1440 to capture cross-day
+            } catch (e) {
+                console.error('Time conversion error:', e);
+                return null;
+            }
+        }
+
+        function formatDuration(totalMinutes) {
+            if (totalMinutes < 0) totalMinutes = 0;
+            const h = Math.floor(totalMinutes / 60);
+            const m = totalMinutes % 60;
+            if (h === 0) return `${m}m`;
+            if (m === 0) return `${h}h`;
+            return `${h}h ${m}m`;
+        }
+
+        // Half-hour helpers
+        function snapToHalfHourCeil(mins) {
+            const rem = mins % 30;
+            return rem === 0 ? mins : mins + (30 - rem);
+        }
+        function snapToHalfHourFloor(mins) {
+            const rem = mins % 30;
+            return mins - rem;
+        }
+
+        function addCityInput() {
+            cityCount++;
+            const cityId = `city-${cityCount}`;
+            const timeZoneOptions = timeZones.map(tz => `<option value="${tz}">${tz.replace('_', ' ')}</option>`).join('');
+            const html = `
+                <div id="${cityId}" data-city-row="true" class="flex flex-col md:flex-row gap-3 p-4 bg-gray-50 border border-gray-200 rounded-lg relative items-end md:items-start">
+                    <button onclick="removeCityInput('${cityId}')" class="absolute top-2 right-2 text-gray-400 hover:text-red-500 transition duration-150">
+                        <svg xmlns=\"http://www.w3.org/2000/svg\" class=\"h-5 w-5\" viewBox=\"0 0 20 20\" fill=\"currentColor\"><path fill-rule=\"evenodd\" d=\"M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z\" clip-rule=\"evenodd\" /></svg>
+                    </button>
+                    <div class="flex-grow w-full md:w-1/3 space-y-2">
+                        <label for="${cityId}-name" class="block text-xs font-medium text-gray-700">Participant name or city</label>
+                        <input type="text" id="${cityId}-name" value="Participant ${cityCount}" placeholder="e.g., Jordan or London" class="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-primary focus:border-primary bg-white text-gray-900 placeholder-gray-400">
+                        <label for="${cityId}-tz" class="block text-xs font-medium text-gray-700 mt-2">Time Zone (IANA)</label>
+                        <select id="${cityId}-tz" class="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-primary focus:border-primary bg-white text-gray-900" title="Examples: America/New_York, Europe/London. DST handled automatically.">
+                            <option value="" disabled selected>Select Time Zone</option>
+                            ${timeZoneOptions}
+                        </select>
+                    </div>
+                    <div class="w-full md:w-2/3 space-y-2 flex items-center gap-3">
+                        <div class="flex-1">
+                            <label for="${cityId}-start" class="block text-xs font-medium text-gray-700">Start Time</label>
+                            <input type="time" id="${cityId}-start" value="09:00" required class="time-input w-full border border-gray-300 rounded-lg p-2.5 text-lg font-mono focus:ring-primary focus:border-primary bg-white text-gray-900">
+                        </div>
+                        <span class="text-gray-500 font-bold self-end mb-2">to</span>
+                        <div class="flex-1">
+                            <label for="${cityId}-end" class="block text-xs font-medium text-gray-700">End Time</label>
+                            <input type="time" id="${cityId}-end" value="17:00" required class="time-input w-full border border-gray-300 rounded-lg p-2.5 text-lg font-mono focus:ring-primary focus:border-primary bg-white text-gray-900">
+                        </div>
+                    </div>
+                    
+                </div>
+            `;
+            cityInputsContainer.insertAdjacentHTML('beforeend', html);
+            if (cityCount <= 2) {
+                const localTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                const selectElement = document.getElementById(`${cityId}-tz`);
+                if (selectElement && localTimeZone) selectElement.value = localTimeZone;
+            }
+
+            // Wire up change handlers to persist to URL
+            const fields = [
+                `${cityId}-name`, `${cityId}-tz`, `${cityId}-start`, `${cityId}-end`
+            ];
+            fields.forEach(fid => {
+                const el = document.getElementById(fid);
+                el.addEventListener('change', encodeStateToQuery);
+                el.addEventListener('input', encodeStateToQuery);
+            });
+            // If global same-for-everyone is enabled, enforce on the newly added row
+            const master = document.getElementById('same-all');
+            if (master && master.checked) applySameForEveryoneMode(true);
+            bindFirstRowSyncListeners();
+            encodeStateToQuery();
+        }
+
+        function removeCityInput(cityId) {
+            document.getElementById(cityId).remove();
+            encodeStateToQuery();
+            const master = document.getElementById('same-all');
+            if (master && master.checked) applySameForEveryoneMode(true);
+            bindFirstRowSyncListeners();
+        }
+
+        // Same-for-everyone helpers
+        function syncTimesFromFirstIfNeeded() {
+            const master = document.getElementById('same-all');
+            if (!master || !master.checked) return;
+            applySameForEveryoneMode(true);
+        }
+
+        function applySameForEveryoneMode(enabled) {
+            const rows = cityInputsContainer.querySelectorAll('div[data-city-row="true"]');
+            if (rows.length === 0) return;
+            const firstId = rows[0].id.split('-')[1];
+            const startVal = document.getElementById(`city-${firstId}-start`).value;
+            const endVal = document.getElementById(`city-${firstId}-end`).value;
+            rows.forEach((div, index) => {
+                if (index === 0) return;
+                const id = div.id.split('-')[1];
+                const sEl = document.getElementById(`city-${id}-start`);
+                const eEl = document.getElementById(`city-${id}-end`);
+                if (enabled) {
+                    sEl.value = startVal;
+                    eEl.value = endVal;
+                    sEl.setAttribute('disabled', 'true');
+                    eEl.setAttribute('disabled', 'true');
+                    sEl.classList.add('text-gray-400', 'bg-gray-100');
+                    eEl.classList.add('text-gray-400', 'bg-gray-100');
+                } else {
+                    sEl.removeAttribute('disabled');
+                    eEl.removeAttribute('disabled');
+                    sEl.classList.remove('text-gray-400', 'bg-gray-100');
+                    eEl.classList.remove('text-gray-400', 'bg-gray-100');
+                }
+            });
+            encodeStateToQuery();
+        }
+
+        function bindFirstRowSyncListeners() {
+            const rows = cityInputsContainer.querySelectorAll('div[data-city-row="true"]');
+            if (!rows.length) return;
+            const firstId = rows[0].id.split('-')[1];
+            const startEl = document.getElementById(`city-${firstId}-start`);
+            const endEl = document.getElementById(`city-${firstId}-end`);
+            if (startEl && !startEl.dataset.syncBound) {
+                startEl.addEventListener('input', syncTimesFromFirstIfNeeded);
+                startEl.dataset.syncBound = '1';
+            }
+            if (endEl && !endEl.dataset.syncBound) {
+                endEl.addEventListener('input', syncTimesFromFirstIfNeeded);
+                endEl.dataset.syncBound = '1';
+            }
+        }
+
+        function displayError(message) {
+            errorMessageDiv.textContent = message;
+            errorMessageDiv.classList.remove('hidden');
+            resultsPanel.classList.remove('hidden');
+            overlapMessage.innerHTML = '';
+            resultsTable.innerHTML = '';
+            selectionSummary.classList.add('hidden');
+        }
+
+        function hideError() {
+            errorMessageDiv.classList.add('hidden');
+        }
+
+        function renderResultsTable(options, convertedCities, browserTimeZone, contextMessage, contextStyleClasses) {
+            // Reset
+            resultsTable.innerHTML = '';
+            selectedColumnIndex = null;
+            selectionSummary.classList.add('hidden');
+            currentRenderedOptions = options;
+
+            // Context message
+            overlapMessage.innerHTML = contextMessage;
+            overlapMessage.className = `mb-4 p-3 rounded-lg font-medium ${contextStyleClasses}`;
+
+            // Build table
+            const table = document.createElement('table');
+            table.className = 'min-w-full border border-gray-200 rounded-lg overflow-hidden';
+
+            const thead = document.createElement('thead');
+            const headRow = document.createElement('tr');
+
+            const thLeft = document.createElement('th');
+            thLeft.scope = 'col';
+            thLeft.className = 'sticky left-0 z-30 bg-gray-50 px-3 py-2 text-left text-sm font-semibold text-gray-700 border-b border-gray-200';
+            thLeft.textContent = 'Participant / Time Zone';
+            headRow.appendChild(thLeft);
+
+            options.forEach((opt, idx) => {
+                const th = document.createElement('th');
+                th.scope = 'col';
+                th.dataset.colIndex = String(idx);
+                th.className = 'sticky top-0 z-20 bg-gray-50 px-3 py-2 text-left text-sm font-semibold text-gray-700 border-b border-l border-gray-200';
+                const startStr = formatMinutesToTime((opt.startMins + 1440) % 1440);
+                const endStr = formatMinutesToTime((opt.endMins + 1440) % 1440);
+                const badge = opt.type === 'strict' ? '<span class="ml-2 text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded">Within Hours</span>'
+                                                    : '<span class="ml-2 text-xs text-orange-800 bg-orange-100 px-2 py-0.5 rounded">Compromise</span>';
+                th.innerHTML = `<button type=\"button\" class=\"hover:bg-gray-100 rounded px-1 -mx-1\" aria-pressed=\"false\" data-col-index=\"${idx}\"><span class=\"font-bold\">Option ${idx + 1}:</span> ${startStr} - ${endStr} <span class=\"text-gray-400\">(${browserTimeZone})</span><br><span class=\"ml-2 text-xs text-gray-600\">${opt.conformCount} of ${convertedCities.length} within business hours</span> ${badge}</button>`;
+                th.addEventListener('click', () => toggleColumnSelection(idx));
+                headRow.appendChild(th);
+            });
+
+            thead.appendChild(headRow);
+            table.appendChild(thead);
+
+            const tbody = document.createElement('tbody');
+
+            convertedCities.forEach((city, rowIdx) => {
+                const tr = document.createElement('tr');
+                tr.className = rowIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+
+                const tdLeft = document.createElement('td');
+                tdLeft.className = 'sticky left-0 z-10 bg-inherit px-3 py-3 text-sm border-t border-gray-200 align-top';
+                tdLeft.innerHTML = `<div class="font-semibold text-gray-700">${city.name}</div><div class="text-xs text-primary">${city.timeZone}</div>`;
+                tr.appendChild(tdLeft);
+
+                options.forEach((opt, idx) => {
+                    const td = document.createElement('td');
+                    td.dataset.colIndex = String(idx);
+                    td.className = 'px-3 py-3 text-left text-sm border-t border-l border-gray-200 align-top';
+
+                    const { timeText: startText, dayDelta: dayStart } = convertBaseMinsToTargetTimeDetailed((opt.startMins + 1440) % 1440, city.timeZone);
+                    const { timeText: endText, dayDelta: dayEnd } = convertBaseMinsToTargetTimeDetailed((opt.endMins + 1440) % 1440, city.timeZone);
+
+                    let chipsHtml = '';
+                    const adj = opt.adjustments[rowIdx];
+                    if (adj && (adj.earlyMins === 0 && adj.lateMins === 0)) {
+                        chipsHtml = '<span class="inline-block text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded">Within</span>';
+                    } else if (adj) {
+                        if (adj.earlyMins > 0 && adj.lateMins > 0) {
+                            chipsHtml = '<span class="inline-block text-xs text-red-700 bg-red-100 px-2 py-0.5 rounded">Major adjustment</span>';
+                        } else {
+                            if (adj.earlyMins > 0) chipsHtml += `<span class=\"inline-block text-xs text-orange-900 bg-orange-100 px-2 py-0.5 rounded mr-1\">Start +${formatDuration(adj.earlyMins)}</span>`;
+                            if (adj.lateMins > 0) chipsHtml += `<span class=\"inline-block text-xs text-orange-900 bg-orange-100 px-2 py-0.5 rounded\">End +${formatDuration(adj.lateMins)}</span>`;
+                        }
+                    }
+
+                    const dayBadge = (delta) => delta === 0 ? '' : `<span class=\"ml-1 text-[10px] text-gray-500\">${delta > 0 ? '+1d' : '-1d'}</span>`;
+
+                    td.innerHTML = `
+                        <button type="button" class="w-full text-left hover:bg-gray-50 rounded px-1 -mx-1" data-col-index="${idx}">
+                            <div class="text-base font-semibold ${opt.type === 'strict' ? 'text-green-600' : 'text-gray-800'}">${startText}${dayBadge(dayStart)} - ${endText}${dayBadge(dayEnd)}</div>
+                            <div class="mt-1 space-x-1">${chipsHtml}</div>
+                        </button>
+                    `;
+                    td.addEventListener('click', () => toggleColumnSelection(idx));
+                    tr.appendChild(td);
+                });
+
+                tbody.appendChild(tr);
+            });
+
+            table.appendChild(tbody);
+            resultsTable.appendChild(table);
+        }
+
+        function clearColumnSelection() {
+            document.querySelectorAll('[data-col-index]').forEach(el => {
+                el.classList.remove('bg-indigo-50');
+                if (el.tagName === 'BUTTON') el.setAttribute('aria-pressed', 'false');
+            });
+            selectionSummary.classList.add('hidden');
+            selectionSummary.textContent = '';
+        }
+
+        function toggleColumnSelection(colIndex) {
+            if (selectedColumnIndex === colIndex) {
+                clearColumnSelection();
+                selectedColumnIndex = null;
+                return;
+            }
+            selectedColumnIndex = colIndex;
+            clearColumnSelection();
+            const cells = document.querySelectorAll(`[data-col-index="${colIndex}"]`);
+            cells.forEach(el => {
+                el.classList.add('bg-indigo-50');
+                if (el.tagName === 'BUTTON') el.setAttribute('aria-pressed', 'true');
+            });
+
+            // Build summary using computed metrics
+            const opt = currentRenderedOptions[colIndex];
+            if (opt) {
+                const startStr = formatMinutesToTime((opt.startMins + 1440) % 1440);
+                const endStr = formatMinutesToTime((opt.endMins + 1440) % 1440);
+                selectionSummary.textContent = `Selected ${startStr} - ${endStr} — ${opt.conformCount} of ${opt.adjustments.length} participants within business hours; total adjustment: ${formatDuration(opt.totalAdjustment)}`;
+                selectionSummary.classList.remove('hidden');
+            }
+            // Persist selection in URL
+            encodeStateToQuery();
+        }
+
+        function calculateOverlap() {
+            hideError();
+            resultsTable.innerHTML = '';
+            overlapMessage.innerHTML = '';
+            selectionSummary.classList.add('hidden');
+
+            const citiesData = [];
+            const cityDivs = cityInputsContainer.querySelectorAll('div[data-city-row="true"]');
+            if (cityDivs.length < 2) return displayError('Please add at least two cities to calculate a meeting overlap.');
+
+            for (const div of cityDivs) {
+                const id = div.id.split('-')[1];
+                const name = document.getElementById(`city-${id}-name`).value.trim();
+                const timeZone = document.getElementById(`city-${id}-tz`).value;
+                const start = document.getElementById(`city-${id}-start`).value;
+                const end = document.getElementById(`city-${id}-end`).value;
+                if (!name || !timeZone || !start || !end) return displayError('Please ensure all fields (Name, Time Zone, Start, End) are filled for all participants.');
+                if (timeToMinutes(start) === timeToMinutes(end)) return displayError(`The start and end times cannot be the same for participant: ${name}.`);
+                citiesData.push({ name, timeZone, start, end });
+            }
+
+            let maxBaseStart = 0;
+            let minBaseEnd = 24 * 60;
+            const convertedCities = citiesData.map(city => {
+                const baseStartMins = getBaseMinsEquivalent(city.start, city.timeZone);
+                const baseEndMins = getBaseMinsEquivalent(city.end, city.timeZone);
+                if (baseStartMins === null || baseEndMins === null) throw new Error(`Time conversion failed for ${city.name} (${city.timeZone}).`);
+                maxBaseStart = Math.max(maxBaseStart, baseStartMins);
+                minBaseEnd = Math.min(minBaseEnd, baseEndMins);
+                return { ...city, baseStartMins, baseEndMins };
+            });
+
+            resultsPanel.classList.remove('hidden');
+            const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+            // Build intervals per city (covering previous, current, next day to evaluate cross-midnight)
+            const intervalsPerCity = convertedCities.map(city => {
+                const s = city.baseStartMins;
+                let e = city.baseEndMins;
+                const adjustedEnd = e < s ? e + 1440 : e;
+                return [
+                    [s, adjustedEnd],
+                    [s - 1440, adjustedEnd - 1440],
+                    [s + 1440, adjustedEnd + 1440],
+                ];
+            });
+
+            // Enumerate all 30-min slots across the base day
+            const candidateOptions = [];
+            for (let s = 0; s < 1440; s += 30) {
+                const e = s + 30;
+                let conform = 0;
+                let totalAdj = 0;
+                const adjustments = [];
+                intervalsPerCity.forEach((intervals) => {
+                    let bestEarly = Infinity, bestLate = Infinity, bestSum = Infinity;
+                    intervals.forEach(([is, ie]) => {
+                        const early = Math.max(0, is - s);
+                        const late = Math.max(0, e - ie);
+                        const sum = early + late;
+                        if (sum < bestSum) { bestSum = sum; bestEarly = early; bestLate = late; }
+                    });
+                    if (bestSum === Infinity) { bestEarly = 0; bestLate = 0; bestSum = 0; }
+                    if (bestSum === 0) conform += 1;
+                    totalAdj += bestSum;
+                    adjustments.push({ earlyMins: bestEarly, lateMins: bestLate });
+                });
+                candidateOptions.push({ startMins: s, endMins: e % 1440, type: conform === convertedCities.length ? 'strict' : 'compromise', conformCount: conform, totalAdjustment: totalAdj, adjustments });
+            }
+
+            // Determine levels and allow switching
+            bestConformGlobal = candidateOptions.reduce((max, o) => Math.max(max, o.conformCount), 0);
+            if (currentConformLevel === null) currentConformLevel = bestConformGlobal;
+
+            const levels = [];
+            for (let lvl = bestConformGlobal; lvl >= 1; lvl--) levels.push(lvl);
+            const levelSelect = document.getElementById('conformity-level');
+            levelSelect.innerHTML = levels.map(lvl => `<option value="${lvl}" ${lvl === currentConformLevel ? 'selected' : ''}>Show ${lvl} of ${convertedCities.length} within hours</option>`).join('');
+            levelSelect.onchange = () => {
+                currentConformLevel = Number(levelSelect.value);
+                selectedColumnIndex = null; // reset selection on level change
+                desiredSelectedSlot = null;
+                encodeStateToQuery();
+                calculateOverlap();
+            };
+
+            const filtered = candidateOptions
+                .filter(o => o.conformCount === currentConformLevel)
+                .sort((a, b) => {
+                    if (a.totalAdjustment !== b.totalAdjustment) return a.totalAdjustment - b.totalAdjustment;
+                    return a.startMins - b.startMins;
+                });
+
+            const options = filtered;
+            const msg = `<span class=\"font-bold\">Showing all ${options.length} option(s)</span> with level: ${currentConformLevel} of ${convertedCities.length} participants within business hours (Base Time Zone: ${browserTimeZone}).`;
+            const styleClasses = currentConformLevel === convertedCities.length ? 'bg-green-50 text-green-800' : 'bg-orange-50 text-orange-800';
+            renderResultsTable(options, convertedCities, browserTimeZone, msg, styleClasses);
+
+            // Defer selection until after DOM is painted to avoid timing issues
+            setTimeout(() => {
+                let restored = false;
+                if (selectedColumnIndex !== null && selectedColumnIndex >= 0 && selectedColumnIndex < options.length) {
+                    toggleColumnSelection(selectedColumnIndex);
+                    restored = true;
+                }
+                if (!restored && (desiredSelectedSlot || window.__desiredSelectedSlot)) {
+                    const slot = desiredSelectedSlot || window.__desiredSelectedSlot;
+                    const targetHHMM = slot.s;
+                    const idx = options.findIndex(opt => hhmmInTimeZone(opt.startMins, 'UTC') === targetHHMM);
+                    if (idx >= 0) {
+                        toggleColumnSelection(idx);
+                        selectedColumnIndex = idx;
+                        restored = true;
+                    }
+                }
+                if (!restored) selectedColumnIndex = null;
+            }, 0);
+        }
+
+        window.onload = () => {
+            const loaded = tryLoadStateFromQuery();
+            if (!loaded) {
+                addCityInput();
+                addCityInput();
+            }
+            encodeStateToQuery();
+            // Bind global same-all toggle
+            const master = document.getElementById('same-all');
+            master.addEventListener('change', () => applySameForEveryoneMode(master.checked));
+            bindFirstRowSyncListeners();
+            if (loaded) {
+                // Auto-calculate when state is present
+                calculateOverlap();
+            }
+        };
+    </script>
+</body>
+</html>
+
+
