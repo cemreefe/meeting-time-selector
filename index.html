@@ -96,7 +96,7 @@
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-600 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    Meeting Options (Columns) × Participants (Rows)
+                    Meeting Options
                 </h2>
                 <div class="flex flex-col items-end text-xs w-40 max-w-xs md:mr-0 md:ml-0">
                     <span class="text-gray-600 mb-1 whitespace-nowrap">Conformity level</span>
@@ -161,6 +161,7 @@
         let bestConformGlobal = null;
         let currentConformLevel = null;
         let desiredSelectedSlot = null; // {s: 'HH:MM', z: 'UTC'}
+        let shouldScrollToResults = false;
 
         // --- URL state helpers ---
         function encodeStateToQuery() {
@@ -174,7 +175,26 @@
                 const end = document.getElementById(`city-${id}-end`).value;
                 participants.push({ n: name, z: tz, s: start, e: end });
             }
-            const payload = { p: participants };
+            // Determine if participants are still at initial defaults
+            function isDefaultParticipants(list) {
+                const localTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                if (list.length !== 2) return false;
+                const expected = [
+                    { n: 'Participant 1', z: localTz, s: '09:00', e: '17:00' },
+                    { n: 'Participant 2', z: localTz, s: '09:00', e: '17:00' },
+                ];
+                for (let i = 0; i < 2; i++) {
+                    const a = list[i];
+                    const b = expected[i];
+                    if (a.n !== b.n || a.z !== b.z || a.s !== b.s || a.e !== b.e) return false;
+                }
+                return true;
+            }
+
+            const payload = {};
+            if (!isDefaultParticipants(participants)) {
+                payload.p = participants;
+            }
             // Persist selection state
             if (selectedColumnIndex !== null) payload.sel = selectedColumnIndex;
             if (currentConformLevel !== null) payload.level = currentConformLevel;
@@ -185,9 +205,13 @@
                 const utcHHMM = hhmmInTimeZone(sMins, 'UTC');
                 payload.selSlot = { s: utcHHMM, z: 'UTC' };
             }
-            const encoded = encodeURIComponent(JSON.stringify(payload));
             const url = new URL(window.location.href);
-            url.searchParams.set('state', encoded);
+            if (Object.keys(payload).length === 0) {
+                url.searchParams.delete('state');
+            } else {
+                const encoded = encodeURIComponent(JSON.stringify(payload));
+                url.searchParams.set('state', encoded);
+            }
             window.history.replaceState(null, '', url.toString());
         }
 
@@ -225,6 +249,7 @@
                     desiredSelectedSlot = payload.selSlot;
                     window.__desiredSelectedSlot = payload.selSlot; // fallback
                 }
+                shouldScrollToResults = true;
                 return true;
             } catch (e) {
                 console.warn('Failed to load state from URL', e);
@@ -697,6 +722,13 @@
             const msg = `<span class=\"font-bold\">Showing all ${options.length} option(s)</span> with level: ${currentConformLevel} of ${convertedCities.length} participants within business hours (Base Time Zone: ${browserTimeZone}).`;
             const styleClasses = currentConformLevel === convertedCities.length ? 'bg-green-50 text-green-800' : 'bg-orange-50 text-orange-800';
             renderResultsTable(options, convertedCities, browserTimeZone, msg, styleClasses);
+
+            if (shouldScrollToResults) {
+                setTimeout(() => {
+                    resultsPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 0);
+                shouldScrollToResults = false;
+            }
 
             // Defer selection until after DOM is painted to avoid timing issues
             setTimeout(() => {
